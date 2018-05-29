@@ -94,7 +94,7 @@ module Twitch
     # Channel
 
     def channel(channel_id = nil)
-      return your_channel unless channel
+      return your_channel unless channel_id
 
       path = "/channels/"
       url = @base_url + path + channel_id
