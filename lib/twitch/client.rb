@@ -15,7 +15,7 @@ module Twitch
 
       @adapter = get_adapter(options[:adapter] || nil)
 
-      @base_url = "https://api.twitch.tv/kraken"
+      @base_url = "https://api.twitch.tv/helix"
       @alt_base_url = "https://api.twitch.tv/api"
     end
 
@@ -34,9 +34,19 @@ module Twitch
       "#{@base_url}/oauth2/authorize?response_type=code&client_id=#{@client_id}&redirect_uri=#{@redirect_uri}&scope=#{scope}"
     end
 
+    def app_auth
+      url = "https://id.twitch.tv/oauth2/token"
+
+      post(url, {
+        :client_id => @client_id,
+        :client_secret => @secret_key,
+        :grant_type => "client_credentials"
+      })
+    end
+
     def auth(code)
-      path = "/oauth2/token"
-      url = @base_url + path
+      url = "https://id.twitch.tv/oauth2/token"
+
       post(url, {
         :client_id => @client_id,
         :client_secret => @secret_key,
@@ -68,7 +78,7 @@ module Twitch
     def your_user
       return false unless @access_token
 
-      path = "/user?oauth_token=#{@access_token}"
+      path = "/user"
       url = @base_url + path
 
       get(url)
@@ -114,7 +124,7 @@ module Twitch
     def your_channel
       return false unless @access_token
 
-      path = "/channel?oauth_token=#{@access_token}"
+      path = "/channel"
       url = @base_url + path
 
       get(url)
@@ -123,7 +133,7 @@ module Twitch
     def editors(channel_id)
       return false unless @access_token
 
-      path = "/channels/#{channel_id}/editors?oauth_token=#{@access_token}"
+      path = "/channels/#{channel_id}/editors"
       url = @base_url + path
 
       get(url)
@@ -133,7 +143,7 @@ module Twitch
     def edit_channel(channel_id, status, game)
       return false unless @access_token
 
-      path = "/channels/#{channel_id}/?oauth_token=#{@access_token}"
+      path = "/channels/#{channel_id}/"
       url = @base_url + path
       data = {
         :channel =>{
@@ -147,7 +157,7 @@ module Twitch
     def reset_key(channel_id)
       return false unless @access_token
 
-      path = "/channels/#{channel_id}/stream_key?oauth_token=#{@access_token}"
+      path = "/channels/#{channel_id}/stream_key"
       url = @base_url + path
       delete(url)
     end
@@ -155,7 +165,7 @@ module Twitch
     def follow_channel(user_id, channel_id, notifications = nil)
       return false unless @access_token
 
-      path = "/users/#{user_id}/follows/channels/#{channel_id}?oauth_token=#{@access_token}"
+      path = "/users/#{user_id}/follows/channels/#{channel_id}"
       notifications_suffix = notifications.nil? ? "" : "&notifications=#{!!notifications}"
       url = @base_url + path + notifications_suffix
       put(url)
@@ -164,7 +174,7 @@ module Twitch
     def unfollow_channel(user_id, channel_id)
       return false unless @access_token
 
-      path = "/users/#{user_id}/follows/channels/#{channel_id}?oauth_token=#{@access_token}"
+      path = "/users/#{user_id}/follows/channels/#{channel_id}"
       url = @base_url + path
       delete(url)
     end
@@ -172,7 +182,7 @@ module Twitch
     def run_commercial(channel_id, length = 30)
       return false unless @access_token
 
-      path = "/channels/#{channel_id}/commercial?oauth_token=#{@access_token}"
+      path = "/channels/#{channel_id}/commercial"
       url = @base_url + path
       post(url, {
         :length => length
@@ -182,7 +192,7 @@ module Twitch
     def channel_teams(channel_id)
       return false unless @access_token
 
-      path = "/channels/#{channel_id}/teams?oauth_token=#{@access_token}"
+      path = "/channels/#{channel_id}/teams"
       url = @base_url + path
 
       get(url)
@@ -224,7 +234,6 @@ module Twitch
     def followed_streams(options = {})
       return false unless @access_token
 
-      options[:oauth_token] = @access_token
       query = build_query_string(options)
       path = "/streams/followed"
       url = @base_url + path + query
@@ -286,19 +295,9 @@ module Twitch
       get(url)
     end
 
-    def subscribed?(user_id, channel_id, options = {})
-      options[:oauth_token] = @access_token
-      query = build_query_string(options)
-      path = "/users/#{user_id}/subscriptions/#{channel_id}"
-      url = @base_url + path + query
-
-      get(url)
-    end
-
     def followed_videos(options ={})
       return false unless @access_token
 
-      options[:oauth_token] = @access_token
       query = build_query_string(options)
       path = "/videos/followed"
       url = @base_url + path + query
@@ -318,7 +317,6 @@ module Twitch
     # Blocks
 
     def blocks(user_id, options = {})
-      options[:oauth_token] = @access_token
       query = build_query_string(options)
       path = "/users/#{user_id}/blocks"
       url = @base_url + path + query
@@ -329,7 +327,7 @@ module Twitch
     def block_user(user_id, target)
       return false unless @access_token
 
-      path = "/users/#{user_id}/blocks/#{target}?oauth_token=#{@access_token}"
+      path = "/users/#{user_id}/blocks/#{target}"
       url = @base_url + path
       put(url)
     end
@@ -337,7 +335,7 @@ module Twitch
     def unblock_user(user_id, target)
       return false unless @access_token
 
-      path = "/users/#{user_id}/blocks/#{target}?oauth_token=#{@access_token}"
+      path = "/users/#{user_id}/blocks/#{target}"
       url = @base_url + path
       delete(url)
     end
@@ -368,24 +366,29 @@ module Twitch
     # Follows
 
     def following(channel_id, options = {})
+      options[:from_id] = channel_id
       query = build_query_string(options)
-      path = "/channels/#{channel_id}/follows"
+      path = "/users/follows"
       url = @base_url + path + query
 
       get(url)
     end
 
     def followed(user_id, options = {})
+      options[:to_id] = user_id
       query = build_query_string(options)
-      path = "/users/#{user_id}/follows/channels"
+      path = "/users/follows"
       url = @base_url + path + query
 
       get(url)
     end
 
-    def follow_status(user_id, channel_id)
-      path = "/users/#{user_id}/follows/channels/#{channel_id}/?oauth_token=#{@access_token}"
-      url = @base_url + path
+    def follow_status(user_id, channel_id, options = {})
+      options[:from_id] = user_id
+      options[:to_id] = channel_id
+      query = build_query_string(options)
+      path = "/users/follows"
+      url = @base_url + path + query
 
       get(url)
     end
@@ -402,7 +405,7 @@ module Twitch
     # Root
 
     def root()
-      path = "/?oauth_token=#{@access_token}"
+      path = "/"
       url = @base_url + path
 
       get(url)
@@ -412,20 +415,23 @@ module Twitch
 
     def subscribed(channel_id, options = {})
       return false unless @access_token
-      options[:oauth_token] = @access_token
 
+      options[:broadcaster_id] = channel_id
       query = build_query_string(options)
-      path = "/channels/#{channel_id}/subscriptions"
+      path = "/subscriptions"
       url = @base_url + path + query
 
       get(url)
     end
 
-    def subscribed_to_channel(user_id, channel_id)
+    def subscribed_to_channel(user_id, channel_id, options = {})
       return false unless @access_token
 
-      path = "/channels/#{channel_id}/subscriptions/#{user_id}?oauth_token=#{@access_token}"
-      url = @base_url + path
+      options[:user_id] = user_id
+      options[:broadcaster_id] = channel_id
+      query = build_query_string(options)
+      path = "/subscriptions/user"
+      url = @base_url + path + query
 
       get(url)
     end
