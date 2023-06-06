@@ -289,7 +289,7 @@ module Twitch
     end
 
     def video(video_id)
-      path = "/videos/#{video_id}/"
+      path = "/videos?id=#{video_id}"
       url = @base_url + path
 
       get(url)
@@ -310,6 +310,15 @@ module Twitch
       query = build_query_string(options)
       path = "/videos/top"
       url = @base_url + path + query
+
+      get(url)
+    end
+
+    # Clips
+
+    def clip(clip_id)
+      path = "/clips?id=#{clip_id}"
+      url = @base_url + path
 
       get(url)
     end
