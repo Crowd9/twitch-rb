@@ -393,8 +393,8 @@ module Twitch
     end
 
     def follow_status(user_id, channel_id, options = {})
-      options[:from_id] = user_id
-      options[:to_id] = channel_id
+      options[:user_id] = user_id
+      options[:broadcaster_id] = channel_id
       query = build_query_string(options)
       path = "/channels/followed"
       url = @base_url + path + query
