@@ -396,7 +396,7 @@ module Twitch
       options[:from_id] = user_id
       options[:to_id] = channel_id
       query = build_query_string(options)
-      path = "/users/follows"
+      path = "/channels/followed"
       url = @base_url + path + query
 
       get(url)
