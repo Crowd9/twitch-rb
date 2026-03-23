@@ -1,4 +1,5 @@
 require 'rspec'
+require 'webmock/rspec'
 require 'twitch'
 
 RSpec.configure do |config|

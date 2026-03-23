@@ -31,7 +31,7 @@ module Twitch
     def link
       scope = ""
       @scope.each { |s| scope += s + '+' }
-      "#{@base_url}/oauth2/authorize?response_type=code&client_id=#{@client_id}&redirect_uri=#{@redirect_uri}&scope=#{scope}"
+      "https://id.twitch.tv/oauth2/authorize?response_type=code&client_id=#{@client_id}&redirect_uri=#{@redirect_uri}&scope=#{scope}"
     end
 
     def app_auth
