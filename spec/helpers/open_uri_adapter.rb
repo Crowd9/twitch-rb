@@ -7,7 +7,7 @@ module Twitch
         if (method == :get)
           ret = {}
 
-          open(url) do |io|
+          URI.open(url) do |io|
             ret[:body] = JSON.parse(io.read)
             ret[:response] = io.status.first.to_i
           end

@@ -3,219 +3,229 @@ require 'spec_helper'
 describe Twitch do
 
   before(:each) do
-    @client_id = ""
-    @secret_key = ""
-    @redirect_uri = "http://localhost:3000/auth"
-    @scope = ["user_read", "channel_read", "channel_editor", "channel_commercial", "channel_stream", "user_blocks_edit"]
-    @scope_str = ""
-    @scope.each{ |s| @scope_str += s + "+" }
-    @access_token = ""
+    stub_request(:any, /api\.twitch\.tv/).to_return do |request|
+      body = if request.uri.path =~ /\/streams\/featured/
+        if request.uri.query.to_s =~ /limit=100/
+          JSON.generate({ "featured" => Array.new(26, {}) })
+        else
+          JSON.generate({ "featured" => Array.new(25, {}) })
+        end
+      else
+        '{}'
+      end
+      # /channels/followed returns 404 when the user is not following
+      status = request.uri.path =~ /\/channels\/followed/ ? 404 : 200
+      { status: status, body: body, headers: { 'Content-Type' => 'application/json' } }
+    end
   end
+
+  let(:client) { Twitch.new }
 
   it 'should build accurate link' do
-    @t = Twitch.new({
-      :client_id => @client_id,
-      :secret_key => @secret_key,
-      :redirect_uri => @redirect_uri,
-      :scope => ["user_read", "channel_read", "channel_editor", "channel_commercial", "channel_stream", "user_blocks_edit"]
-      })
-    expect( @t.link ).to eq "https://api.twitch.tv/kraken/oauth2/authorize?response_type=code&client_id=#{@client_id}&redirect_uri=#{@redirect_uri}&scope=#{@scope_str}"
+    t = Twitch.new(
+      client_id:    "abc",
+      redirect_uri: "http://localhost:3000/auth",
+      scope:        ["user_read", "channel_read"]
+    )
+    expect(t.link).to eq "https://id.twitch.tv/oauth2/authorize?response_type=code&client_id=abc&redirect_uri=http://localhost:3000/auth&scope=user_read+channel_read+"
   end
 
-  it 'should get user (not authenticated)' do
-    @t = Twitch.new()
-    expect( @t.user("day9")[:response] ).to eq 200
+  # User
+
+  it 'should get user by login name' do
+    client.user("day9")
+    expect(a_request(:get, "https://api.twitch.tv/helix/users/day9")).to have_been_made
   end
 
-  it 'should get user (authenticated)' do
-    @t = Twitch.new({:access_token => @access_token})
-    expect( @t.user("day9")[:response] ).to eq 200 unless @access_token.empty?
+  it 'should not fetch authenticated user when unauthenticated' do
+    expect(client.user).to eq false
+  end
+
+  it 'should get user when authenticated' do
+    skip 'requires a valid access token'
   end
 
   it 'should get authenticated user' do
-    @t = Twitch.new({:access_token => @access_token})
-    expect( @t.user()[:response] ).to eq 200 unless @access_token.empty?
+    skip 'requires a valid access token'
   end
 
-  it 'should not get authenticated user when not authenticated' do
-    @t = Twitch.new()
-    expect( @t.user() ).to eq false
-  end
+  # Teams
 
   it 'should get all teams' do
-    @t = Twitch.new()
-    expect( @t.teams()[:response] ).to eq 200
+    client.teams
+    expect(a_request(:get, "https://api.twitch.tv/helix/teams/")).to have_been_made
   end
 
   it 'should get single team' do
-    @t = Twitch.new()
-    expect( @t.team("eg")[:response] ).to eq 200
+    client.team("eg")
+    expect(a_request(:get, "https://api.twitch.tv/helix/teams/eg")).to have_been_made
   end
+
+  # Channel
 
   it 'should get single channel' do
-    @t = Twitch.new()
-    expect( @t.channel("day9tv")[:response] ).to eq 200
+    client.channel("day9tv")
+    expect(a_request(:get, "https://api.twitch.tv/helix/channels/day9tv")).to have_been_made
   end
 
-  it 'should get channel panels' do
-    @t = Twitch.new()
-    expect( @t.channel_panels("esl_csgo")[:response] ).to eq 200
+  it 'should get channel panels from the alt API base' do
+    client.channel_panels("esl_csgo")
+    expect(a_request(:get, "https://api.twitch.tv/api/channels/esl_csgo/panels")).to have_been_made
+  end
+
+  it 'should not fetch own channel without an access token' do
+    expect(client.channel).to eq false
   end
 
   it 'should get your channel' do
-    @t = Twitch.new({:access_token => @access_token})
-    expect( @t.channel()[:response] ).to eq 200 unless @access_token.empty?
+    skip 'requires a valid access token'
   end
 
   it 'should edit your channel' do
-    @t = Twitch.new({:access_token => @access_token})
-    expect( @t.edit_channel("Changing API", "Diablo III")[:response] ).to eq 200 unless @access_token.empty?
+    skip 'requires a valid access token'
   end
 
-  # it 'should run a comercial on your channel' do
-  #   @t = Twitch.new({:access_token => @access_token})
-  #   expect( @t.runCommercial("dustinlakin")[:response] ).to eq 204
-  # end
+  # Streams
 
   it 'should get a single user stream' do
-    @t = Twitch.new()
-    expect( @t.stream("nasltv")[:response] ).to eq 200
+    client.stream("nasltv")
+    expect(a_request(:get, "https://api.twitch.tv/helix/streams/nasltv")).to have_been_made
   end
 
   it 'should get all streams' do
-    @t = Twitch.new()
-    expect( @t.streams()[:response] ).to eq 200
+    client.streams
+    expect(a_request(:get, "https://api.twitch.tv/helix/streams")).to have_been_made
   end
 
-  it 'should get League of Legends streams with +' do
-    @t = Twitch.new()
-    expect( @t.streams({:game => "League+of+Legends"})[:response] ).to eq 200
+  it 'should encode spaces as + in stream game filter' do
+    client.streams(game: "League of Legends")
+    expect(a_request(:get, "https://api.twitch.tv/helix/streams?game=League+of+Legends")).to have_been_made
   end
 
-  it 'should get League of Legends streams with spaces' do
-    @t = Twitch.new()
-    expect( @t.streams({:game => "League of Legends"})[:response] ).to eq 200
+  it 'should pass pre-encoded + through in stream game filter' do
+    client.streams(game: "League+of+Legends")
+    expect(a_request(:get, "https://api.twitch.tv/helix/streams?game=League+of+Legends")).to have_been_made
   end
 
   it 'should get featured streams' do
-    @t = Twitch.new()
-    res = @t.featured_streams()
-
-    expect(res[:response] ).to eq 200
-    expect(res[:body]["featured"].length ).to eq 25
+    res = client.featured_streams
+    expect(a_request(:get, "https://api.twitch.tv/helix/streams/featured")).to have_been_made
+    expect(res[:body]["featured"].length).to eq 25
   end
 
-  it 'should get more featured streams' do
-    @t = Twitch.new()
-    res = @t.featured_streams({:limit => 100})
-
-    expect(res[:response] ).to eq 200
+  it 'should pass options to featured streams' do
+    res = client.featured_streams(limit: 100)
+    expect(a_request(:get, "https://api.twitch.tv/helix/streams/featured?limit=100")).to have_been_made
     expect(res[:body]["featured"].length).to be > 25
   end
 
+  it 'should not fetch followed streams without an access token' do
+    expect(client.followed_streams).to eq false
+  end
+
+  # Games
+
+  it 'should get top games' do
+    client.top_games
+    expect(a_request(:get, "https://api.twitch.tv/helix/games/top")).to have_been_made
+  end
+
+  # Chat
+
   it 'should get chat links' do
-    @t = Twitch.new()
-    expect( @t.chat_links("day9tv")[:response] ).to eq 200
+    client.chat_links("day9tv")
+    expect(a_request(:get, "https://api.twitch.tv/helix/chat/day9tv")).to have_been_made
   end
 
   it 'should get chat badges' do
-    @t = Twitch.new()
-    expect( @t.badges("day9tv")[:response] ).to eq 200
+    client.badges("day9tv")
+    expect(a_request(:get, "https://api.twitch.tv/helix/chat/day9tv/badges")).to have_been_made
   end
 
   it 'should get chat emoticons' do
-    @t = Twitch.new()
-    expect( @t.emoticons()[:response] ).to eq 200
+    client.emoticons
+    expect(a_request(:get, "https://api.twitch.tv/helix/chat/emoticons")).to have_been_made
   end
 
-  it 'should get channel followers' do
-    @t = Twitch.new()
-    expect( @t.following("day9tv")[:response] ).to eq 200
+  # Follows
+
+  it 'should get channel followers using from_id' do
+    client.following("day9tv")
+    expect(a_request(:get, "https://api.twitch.tv/helix/users/follows?from_id=day9tv")).to have_been_made
   end
 
-  it 'should get channel followers with page 2' do
-    @t = Twitch.new()
-    expect( @t.following("day9tv", offset: 25, limit: 25)[:response] ).to eq 200
+  it 'should paginate channel followers' do
+    client.following("day9tv", offset: 25, limit: 25)
+    expect(a_request(:get, "https://api.twitch.tv/helix/users/follows?offset=25&limit=25&from_id=day9tv")).to have_been_made
   end
 
-  it 'should get channels followed by user' do
-    @t = Twitch.new()
-    expect( @t.followed("day9")[:response] ).to eq 200
+  it 'should get channels followed by user using to_id' do
+    client.followed("day9")
+    expect(a_request(:get, "https://api.twitch.tv/helix/users/follows?to_id=day9")).to have_been_made
   end
 
-  it 'should get channels followed by user with page 2' do
-    @t = Twitch.new()
-    expect( @t.followed("day9", offset: 25, limit: 25)[:response] ).to eq 200
+  it 'should paginate channels followed by user' do
+    client.followed("day9", offset: 25, limit: 25)
+    expect(a_request(:get, "https://api.twitch.tv/helix/users/follows?offset=25&limit=25&to_id=day9")).to have_been_made
   end
 
-  it 'should get status of user following channel' do
-    @t = Twitch.new()
-    expect( @t.follow_status("day9", "day9tv")[:response] ).to eq 404
+  it 'should return 404 when user does not follow channel' do
+    res = client.follow_status("day9", "day9tv")
+    expect(a_request(:get, "https://api.twitch.tv/helix/channels/followed?user_id=day9&broadcaster_id=day9tv")).to have_been_made
+    expect(res[:response]).to eq 404
   end
+
+  it 'should not fetch followed videos without an access token' do
+    expect(client.followed_videos).to eq false
+  end
+
+  # Videos
+
+  it 'should get top videos' do
+    client.top_videos
+    expect(a_request(:get, "https://api.twitch.tv/helix/videos/top")).to have_been_made
+  end
+
+  # Misc
 
   it 'should get ingests' do
-    @t = Twitch.new()
-    expect( @t.ingests[:response] ).to eq 200
+    client.ingests
+    expect(a_request(:get, "https://api.twitch.tv/helix/ingests")).to have_been_made
   end
 
   it 'should get root' do
-    @t = Twitch.new()
-    expect( @t.root[:response] ).to eq 200
+    client.root
+    expect(a_request(:get, "https://api.twitch.tv/helix/")).to have_been_made
   end
 
-  it 'should get your followed streams' do
-    @t = Twitch.new()
-    expect( @t.followed_streams() ).to eq false
-  end
-
-  it 'should get your followed videos' do
-    @t = Twitch.new()
-    expect( @t.followed_videos() ).to eq false
-  end
-
-  it 'should get top games' do
-    @t = Twitch.new()
-    expect( @t.top_games[:response] ).to eq 200
-  end
-
-  it 'should get top videos' do
-    @t = Twitch.new()
-    expect( @t.top_videos[:response] ).to eq 200
-  end
+  # Adapter
 
   it 'should have a default adapter' do
-    @t = Twitch.new
-    expect( @t.adapter ).to eq(Twitch::Adapters::HTTPartyAdapter)
+    expect(Twitch.new.adapter).to eq(Twitch::Adapters::HTTPartyAdapter)
   end
 
-  it 'should work with a different adapter (open-uri).' do
+  it 'should work with a different adapter (open-uri)' do
     require 'helpers/open_uri_adapter'
-
-    @t = Twitch.new adapter: Twitch::Adapters::OpenURIAdapter
-
-    res = @t.featured_streams
-
-    expect( res[:response]                ).to eq 200
-    expect( res[:body]["featured"].length ).to eq 25
+    t = Twitch.new adapter: Twitch::Adapters::OpenURIAdapter
+    res = t.featured_streams
+    expect(res[:response]).to eq 200
+    expect(res[:body]["featured"].length).to eq 25
   end
 
-  it "should fall-back to the default adapter when passed an invalid adapter" do
-    expect( Twitch.new( adapter: false         ).adapter ).to eq( Twitch::Adapters::DEFAULT_ADAPTER )
-    expect( Twitch.new( adapter: 100           ).adapter ).to eq( Twitch::Adapters::DEFAULT_ADAPTER )
-    expect( Twitch.new( adapter: :bad_constant ).adapter ).to eq( Twitch::Adapters::DEFAULT_ADAPTER )
+  it 'should fall back to the default adapter when passed an invalid adapter' do
+    expect(Twitch.new(adapter: false        ).adapter).to eq(Twitch::Adapters::DEFAULT_ADAPTER)
+    expect(Twitch.new(adapter: 100          ).adapter).to eq(Twitch::Adapters::DEFAULT_ADAPTER)
+    expect(Twitch.new(adapter: :bad_constant).adapter).to eq(Twitch::Adapters::DEFAULT_ADAPTER)
 
-    @t = Twitch.new
-    @t.adapter = nil
-
-    expect( @t.adapter ).to eq( Twitch::Adapters::DEFAULT_ADAPTER )
+    t = Twitch.new
+    t.adapter = nil
+    expect(t.adapter).to eq(Twitch::Adapters::DEFAULT_ADAPTER)
   end
 
   it 'should provide required Client-Id header each request' do
-    require 'helpers/debug_httparty_adapter'
-    $debug_output = StringIO.new
-
-    Twitch.new(adapter: Twitch::Adapters::DebugHTTPartyAdapter, client_id: "test").featured_streams
-
-    expect($debug_output.string).to match(/Client-Id: test/)
+    Twitch.new(client_id: "test").featured_streams
+    expect(a_request(:get, "https://api.twitch.tv/helix/streams/featured").
+      with(headers: { 'Client-ID' => 'test' })).to have_been_made
   end
+
 end
